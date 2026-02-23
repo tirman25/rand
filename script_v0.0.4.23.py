@@ -3979,7 +3979,7 @@ def _btn_handler(q, uid, d, context):
             [InlineKeyboardButton("🔙 Назад", callback_data='main_menu')]
         ]))
 
-    elif d == 'history' or d.startswith('history_page_') or d.startswith('history_sort_') or d.startswith('history_game_') or d.startswith('history_win_') or d == 'history_all' or d == 'history_paged' or (d.startswith('history_goto_') and d != 'history_goto_menu'):
+    elif d == 'history' or d.startswith('history_page_') or d.startswith('history_sort_') or d == 'history_all' or d == 'history_paged' or (d.startswith('history_goto_') and d != 'history_goto_menu'):
         # Обработка истории игр с расширенной сортировкой
         page = 0
         
@@ -3996,8 +3996,8 @@ def _btn_handler(q, uid, d, context):
         sort_win = context.user_data.get('history_sort_win', None)  # None = все, True = выигрыши, False = проигрыши
         show_all = context.user_data.get('history_show_all', False)  # Показать всё без страниц
         
-        # Обрабатываем изменение сортировки
-        if d.startswith('history_sort_'):
+        # Обрабатываем изменение сортировки (кроме reset - у него свой обработчик)
+        if d.startswith('history_sort_') and d != 'history_sort_reset':
             sort_type = d.replace('history_sort_', '')
             if sort_type == 'newest':
                 context.user_data['history_sort_games'] = []
@@ -4139,7 +4139,7 @@ def _btn_handler(q, uid, d, context):
         for game in ALL_GAMES:
             emoji = GAME_EMOJIS.get(game, '🎮')
             is_selected = game in sort_games
-            check = "☑️ " if is_selected else "⬜ "
+            check = "☑️ " if is_selected else ""
             game_buttons.append([InlineKeyboardButton(
                 f"{check}{emoji} {game}",
                 callback_data=f'history_game_toggle_{game}'
@@ -4195,18 +4195,21 @@ def _btn_handler(q, uid, d, context):
         # Остаемся в меню
         d = 'history_menu'
         _btn_handler(q, uid, d, context)
+        return
 
     elif d == 'history_game_select_all':
         # Выбрать все игры
         context.user_data['history_sort_games'] = ALL_GAMES.copy()
         d = 'history_menu'
         _btn_handler(q, uid, d, context)
+        return
 
     elif d == 'history_game_clear':
         # Снять выбор со всех игр
         context.user_data['history_sort_games'] = []
         d = 'history_menu'
         _btn_handler(q, uid, d, context)
+        return
 
     elif d.startswith('history_win_'):
         # Фильтр по выигрышу/проигрышу - остаемся в меню
@@ -4219,6 +4222,7 @@ def _btn_handler(q, uid, d, context):
             context.user_data['history_sort_win'] = False
         d = 'history_menu'
         _btn_handler(q, uid, d, context)
+        return
 
     elif d == 'history_sort_reset':
         # Сброс всех фильтров
@@ -4226,6 +4230,7 @@ def _btn_handler(q, uid, d, context):
         context.user_data['history_sort_win'] = None
         d = 'history_menu'
         _btn_handler(q, uid, d, context)
+        return
 
     elif d == 'history_goto_menu':
         # Меню перехода на конкретную страницу
