@@ -20,6 +20,9 @@ GAME_EMOJIS = {
     'Свечи': '📊',
 }
 
+# Список всех игр для фильтров (всегда доступен)
+ALL_GAMES = list(GAME_EMOJIS.keys())
+
 def format_game_detail(gname, details_raw, amount, is_win, created_at, is_rolled_back=False):
     """Format a detailed game history view with proof data."""
     emoji = GAME_EMOJIS.get(gname, '🎮')
@@ -3989,7 +3992,7 @@ def _btn_handler(q, uid, d, context):
             page = int(d.replace('history_goto_', ''))
         
         # Получаем параметры сортировки из context.user_data
-        sort_game = context.user_data.get('history_sort_game', None)  # None = все игры
+        sort_games = context.user_data.get('history_sort_games', [])  # Список выбранных игр
         sort_win = context.user_data.get('history_sort_win', None)  # None = все, True = выигрыши, False = проигрыши
         show_all = context.user_data.get('history_show_all', False)  # Показать всё без страниц
         
@@ -3997,7 +4000,7 @@ def _btn_handler(q, uid, d, context):
         if d.startswith('history_sort_'):
             sort_type = d.replace('history_sort_', '')
             if sort_type == 'newest':
-                context.user_data['history_sort_game'] = None
+                context.user_data['history_sort_games'] = []
                 context.user_data['history_sort_win'] = None
             elif sort_type == 'wins':
                 context.user_data['history_sort_win'] = True
@@ -4006,29 +4009,9 @@ def _btn_handler(q, uid, d, context):
             elif sort_type == 'all':
                 context.user_data['history_sort_win'] = None
             page = 0
-            sort_game = context.user_data.get('history_sort_game', None)
+            sort_games = context.user_data.get('history_sort_games', [])
             sort_win = context.user_data.get('history_sort_win', None)
 
-        elif d.startswith('history_game_'):
-            game_name = d.replace('history_game_', '')
-            if game_name == 'all':
-                context.user_data['history_sort_game'] = None
-            else:
-                context.user_data['history_sort_game'] = game_name
-            page = 0
-            sort_game = context.user_data.get('history_sort_game', None)
-        
-        elif d.startswith('history_win_'):
-            win_filter = d.replace('history_win_', '')
-            if win_filter == 'all':
-                context.user_data['history_sort_win'] = None
-            elif win_filter == 'wins':
-                context.user_data['history_sort_win'] = True
-            elif win_filter == 'losses':
-                context.user_data['history_sort_win'] = False
-            page = 0
-            sort_win = context.user_data.get('history_sort_win', None)
-        
         elif d == 'history_all':
             context.user_data['history_show_all'] = True
             show_all = True
@@ -4037,12 +4020,30 @@ def _btn_handler(q, uid, d, context):
             show_all = False
             page = 0
         
-        # Получаем список всех игр для фильтра
-        all_games = get_all_games()
-        
         # Получаем историю с фильтрами
+        # Если выбрано несколько игр, фильтруем по первой (или можно изменить функцию для поддержки списка)
+        # Для простоты: если выбрана одна игра - фильтруем по ней, если несколько - показываем все выбранные
         page_size = -1 if show_all else 5  # -1 = все
-        rows, total = get_history_paged(uid, page, page_size=page_size, rolled_back=False, game_name=sort_game, is_win=sort_win)
+        
+        # Получаем все игры и фильтруем на стороне Python если нужно
+        if len(sort_games) == 1:
+            # Одна игра - используем оптимизированный запрос
+            rows, total = get_history_paged(uid, page, page_size=page_size, rolled_back=False, game_name=sort_games[0], is_win=sort_win)
+        elif len(sort_games) > 1:
+            # Несколько игр - получаем все и фильтруем
+            all_rows, total = get_history_paged(uid, 0, page_size=-1, rolled_back=False, game_name=None, is_win=sort_win)
+            # Фильтруем по выбранным играм
+            filtered_rows = [r for r in all_rows if r[1] in sort_games]
+            total = len(filtered_rows)
+            # Пагинация
+            if page_size > 0:
+                start = page * page_size
+                rows = filtered_rows[start:start + page_size]
+            else:
+                rows = filtered_rows
+        else:
+            # Нет выбранных игр - показываем все
+            rows, total = get_history_paged(uid, page, page_size=page_size, rolled_back=False, game_name=None, is_win=sort_win)
         
         # Валидация страницы (только для постраничного режима)
         if not show_all:
@@ -4053,14 +4054,26 @@ def _btn_handler(q, uid, d, context):
                 page = 0
             # Повторный запрос с валидной страницей
             if page != 0 and rows == [] and total > 0:
-                rows, total = get_history_paged(uid, page, page_size=5, rolled_back=False, game_name=sort_game, is_win=sort_win)
+                if len(sort_games) == 1:
+                    rows, total = get_history_paged(uid, page, page_size=5, rolled_back=False, game_name=sort_games[0], is_win=sort_win)
+                elif len(sort_games) > 1:
+                    all_rows, total = get_history_paged(uid, 0, page_size=-1, rolled_back=False, game_name=None, is_win=sort_win)
+                    filtered_rows = [r for r in all_rows if r[1] in sort_games]
+                    total = len(filtered_rows)
+                    start = page * 5
+                    rows = filtered_rows[start:start + 5]
+                else:
+                    rows, total = get_history_paged(uid, page, page_size=5, rolled_back=False, game_name=None, is_win=sort_win)
         else:
             pages = 1
         
         # Формируем текст фильтров
         filter_text = []
-        if sort_game:
-            filter_text.append(f"🎮 {sort_game}")
+        if sort_games:
+            if len(sort_games) == 1:
+                filter_text.append(f"🎮 {sort_games[0]}")
+            else:
+                filter_text.append(f"🎮 {len(sort_games)} игр")
         if sort_win is True:
             filter_text.append("✅ Выигрыши")
         elif sort_win is False:
@@ -4121,12 +4134,9 @@ def _btn_handler(q, uid, d, context):
         sort_games = context.user_data.get('history_sort_games', [])  # Список выбранных игр
         sort_win = context.user_data.get('history_sort_win', None)  # None = все, True = выигрыши, False = проигрыши
         
-        # Получаем список игр
-        all_games = get_all_games()
-        
-        # Формируем кнопки фильтра по играм (чекбоксы)
+        # Формируем кнопки фильтра по играм (чекбоксы) - используем предопределённый список
         game_buttons = []
-        for game in all_games[:8]:  # Показываем первые 8 игр
+        for game in ALL_GAMES:
             emoji = GAME_EMOJIS.get(game, '🎮')
             is_selected = game in sort_games
             check = "☑️ " if is_selected else "⬜ "
@@ -4167,8 +4177,7 @@ def _btn_handler(q, uid, d, context):
                 all_btn,
                 win_buttons,
                 [InlineKeyboardButton("🔄 Сбросить все фильтры", callback_data='history_sort_reset')],
-                [InlineKeyboardButton("✅ Применить и закрыть", callback_data='history')],
-                [InlineKeyboardButton("🔙 Назад", callback_data='history')]
+                [InlineKeyboardButton("✅ Применить и закрыть", callback_data='history')]
             ])
         )
 
@@ -4189,8 +4198,7 @@ def _btn_handler(q, uid, d, context):
 
     elif d == 'history_game_select_all':
         # Выбрать все игры
-        all_games = get_all_games()
-        context.user_data['history_sort_games'] = all_games[:8]
+        context.user_data['history_sort_games'] = ALL_GAMES.copy()
         d = 'history_menu'
         _btn_handler(q, uid, d, context)
 
@@ -4221,11 +4229,18 @@ def _btn_handler(q, uid, d, context):
 
     elif d == 'history_goto_menu':
         # Меню перехода на конкретную страницу
-        sort_game = context.user_data.get('history_sort_game', None)
+        sort_games = context.user_data.get('history_sort_games', [])
         sort_win = context.user_data.get('history_sort_win', None)
         
         # Получаем общее количество
-        _, total = get_history_paged(uid, 0, page_size=5, rolled_back=False, game_name=sort_game, is_win=sort_win)
+        if len(sort_games) == 1:
+            _, total = get_history_paged(uid, 0, page_size=5, rolled_back=False, game_name=sort_games[0], is_win=sort_win)
+        elif len(sort_games) > 1:
+            all_rows, _ = get_history_paged(uid, 0, page_size=-1, rolled_back=False, game_name=None, is_win=sort_win)
+            filtered_rows = [r for r in all_rows if r[1] in sort_games]
+            total = len(filtered_rows)
+        else:
+            _, total = get_history_paged(uid, 0, page_size=5, rolled_back=False, game_name=None, is_win=sort_win)
         pages = (total + 4) // 5 or 1
         
         if pages <= 7:
