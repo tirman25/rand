@@ -27,7 +27,9 @@ def format_game_detail(gname, details_raw, amount, is_win, created_at, is_rolled
     """Format a detailed game history view with proof data."""
     emoji = GAME_EMOJIS.get(gname, '🎮')
     sign = '+' if is_win else '-'
-    result_line = f"{'✅ Выигрыш' if is_win else '❌ Проигрыш'} │ {sign}{amount} 💰"
+    # Используем format_number для больших значений
+    amount_str = format_number(amount)
+    result_line = f"{'✅ Выигрыш' if is_win else '❌ Проигрыш'} │ {sign}{amount_str} 💰"
     sep = "━━━━━━━━━━━━━━━━"
     try:
         data = json.loads(details_raw)
@@ -40,16 +42,22 @@ def format_game_detail(gname, details_raw, amount, is_win, created_at, is_rolled
         bet = data.get('bet', '?')
         moves = data.get('moves', [])
         coeff = data.get('coeff', 1)
-        lines.append(f"💰 Ставка: {bet} | Коэффициент: x{coeff:.0f}")
+        bet_str = format_number(bet) if isinstance(bet, int) else str(bet)
+        lines.append(f"💰 Ставка: {bet_str} | Коэффициент: x{coeff:.0f}")
         if moves:
-            lines.append(f"🎲 Ходы: {' → '.join(moves)}")
+            # Ограничиваем количество ходов для вывода (максимум 10)
+            moves_display = moves[:10]
+            if len(moves) > 10:
+                moves_display.append(f"...(+{len(moves)-10})")
+            lines.append(f"🎲 Ходы: {' → '.join(moves_display)}")
 
     elif gname == 'Минёр':
         bet = data.get('bet', '?')
         mines_n = data.get('mines', '?')
         cleared = data.get('cleared', 0)
         mine_pos = set(data.get('mine_positions', []))
-        lines.append(f"💰 Ставка: {bet} | 💣 Мин: {mines_n} | ✅ Открыто: {cleared}")
+        bet_str = format_number(bet) if isinstance(bet, int) else str(bet)
+        lines.append(f"💰 Ставка: {bet_str} | 💣 Мин: {mines_n} | ✅ Открыто: {cleared}")
         lines.append(sep)
         lines.append("🗺️ Поле (💣=мина, 🟩=безопасно):")
         for row in range(5):
@@ -62,10 +70,14 @@ def format_game_detail(gname, details_raw, amount, is_win, created_at, is_rolled
         floor_reached = data.get('floor_reached', 0)
         traps_count = data.get('traps_count', 1)
         result = data.get('result', '')
-        lines.append(f"💰 Ставка: {bet} | Этажей пройдено: {floor_reached}/{TOWER_FLOORS} | Бомб: {traps_count}")
+        bet_str = format_number(bet) if isinstance(bet, int) else str(bet)
+        lines.append(f"💰 Ставка: {bet_str} | Этажей: {floor_reached}/{TOWER_FLOORS} | 💣: {traps_count}")
         lines.append(sep)
         lines.append("🗺️ Карта башни (💣=ловушка):")
-        for f in range(min(len(traps), TOWER_FLOORS) - 1, -1, -1):
+        # Ограничиваем вывод только для пройденных этажей + 2 этажа выше
+        max_floor_to_show = min(len(traps), TOWER_FLOORS)
+        start_floor = max(0, max_floor_to_show - 12)  # Показываем максимум 12 этажей
+        for f in range(max_floor_to_show - 1, start_floor - 1, -1):
             if f >= len(traps):
                 continue
             floor_traps = traps[f]
@@ -79,19 +91,22 @@ def format_game_detail(gname, details_raw, amount, is_win, created_at, is_rolled
                 if result == 'boom' and f == floor_reached:
                     status = "💥"
                 elif f > floor_reached or (result == 'boom' and f >= floor_reached):
-                    status = "⬆️ не дошёл"
+                    status = "⬆️"
                 else:
                     status = "✅"
             else:
                 status = "✅"
             lines.append(f"Эт.{f+1}: {' '.join(cells)}  {status}")
+        if max_floor_to_show > 8:
+            lines.append("... (остальные этажи скрыты)")
 
     elif gname == 'Джетпак':
         bet = data.get('bet', '?')
         crash = data.get('crash', 0)
         collect = data.get('collect', None)
         result = data.get('result', '')
-        lines.append(f"💰 Ставка: {bet}")
+        bet_str = format_number(bet) if isinstance(bet, int) else str(bet)
+        lines.append(f"💰 Ставка: {bet_str}")
         lines.append(f"💥 Краш был на: {crash:.2f}x")
         if collect:
             action = "🤖 Авто-сбор" if result == 'auto' else "✋ Забрал"
@@ -103,7 +118,8 @@ def format_game_detail(gname, details_raw, amount, is_win, created_at, is_rolled
         bet = data.get('bet', '?')
         reels = data.get('reels', [])
         mult = data.get('mult', 0)
-        lines.append(f"💰 Ставка: {bet}")
+        bet_str = format_number(bet) if isinstance(bet, int) else str(bet)
+        lines.append(f"💰 Ставка: {bet_str}")
         if reels:
             lines.append(f"🎰 Барабаны: {' │ '.join(reels)}")
         lines.append("🎉 Множитель: x" + str(mult) if mult > 1 else ("↩️ Возврат ставки" if mult == 1 else "💸 Промах"))
@@ -113,9 +129,14 @@ def format_game_detail(gname, details_raw, amount, is_win, created_at, is_rolled
         moves = data.get('moves', [])
         coeff = data.get('coeff', 1)
         result = data.get('result', '')
-        lines.append(f"💰 Ставка: {bet} | Коэффициент: x{coeff:.1f}")
+        bet_str = format_number(bet) if isinstance(bet, int) else str(bet)
+        lines.append(f"💰 Ставка: {bet_str} | Коэффициент: x{coeff:.1f}")
         if moves:
-            lines.append(f"📊 Ходы: {' → '.join(moves)}")
+            # Ограничиваем количество ходов для вывода (максимум 10)
+            moves_display = moves[:10]
+            if len(moves) > 10:
+                moves_display.append(f"...(+{len(moves)-10})")
+            lines.append(f"📊 Ходы: {' → '.join(moves_display)}")
 
     lines.append(sep)
     # Форматируем дату правильно
@@ -155,7 +176,13 @@ def format_game_detail(gname, details_raw, amount, is_win, created_at, is_rolled
         lines.append(sep)
         lines.append("↩️ Эта игра была откачена")
 
-    return "\n".join(lines)
+    # Проверяем длину сообщения и обрезаем если нужно (лимит 4000 символов для безопасности)
+    result = "\n".join(lines)
+    if len(result) > 4000:
+        # Обрезаем с конца, оставляя начало
+        result = result[:3950] + "\n... (текст обрезан)"
+
+    return result
 
 DB_PATH = 'users.db'
 
@@ -611,6 +638,36 @@ def time_until_hourly(uid):
 
 # ─────────── ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ───────────
 
+def format_number(num):
+    """Format large numbers with K, M, B, T suffixes for better readability"""
+    if num is None:
+        return "0"
+    try:
+        num = int(num)
+    except (ValueError, TypeError):
+        return str(num)
+
+    if num >= 1_000_000_000_000:
+        return f"{num / 1_000_000_000_000:.2f}T"
+    elif num >= 1_000_000_000:
+        return f"{num / 1_000_000_000:.2f}B"
+    elif num >= 1_000_000:
+        return f"{num / 1_000_000:.2f}M"
+    elif num >= 1_000:
+        return f"{num / 1_000:.2f}K"
+    else:
+        return str(num)
+
+def format_number_full(num):
+    """Format full number with separators for display in alerts"""
+    if num is None:
+        return "0"
+    try:
+        num = int(num)
+    except (ValueError, TypeError):
+        return str(num)
+    return f"{num:,}"
+
 def is_game_rolled_back(is_rolled_back):
     """Check if game is rolled back. Returns True if is_rolled_back == 1, False otherwise (including None)"""
     # Обрабатываем разные типы данных
@@ -647,8 +704,7 @@ def games_menu_kb():
          InlineKeyboardButton("🎰 Слоты",   callback_data='slots_menu')],
         [InlineKeyboardButton("⛏️ Минёр",   callback_data='miner_menu'),
          InlineKeyboardButton("🗼 Башня",    callback_data='tower_menu')],
-        [InlineKeyboardButton("🚀 Джетпак", callback_data='jp_menu'),
-         InlineKeyboardButton("📊 Свечи",    callback_data='candles_menu')],
+        [InlineKeyboardButton("🚀 Джетпак", callback_data='jp_menu')],
         [InlineKeyboardButton("🔙 Назад",   callback_data='main_menu')]
     ])
 
@@ -708,9 +764,16 @@ def tower_keyboard(floor, traps_count=1):
     
     # Выбираем коэффициенты в зависимости от количества бомб
     coeffs = TOWER_COEFFS_2BOMBS if traps_count == 2 else TOWER_COEFFS_1BOMB
-    coeff = coeffs[floor] if floor < TOWER_FLOORS else coeffs[-1]
-    
-    kb.append([InlineKeyboardButton(f"💳 Забрать (x{coeff:.1f})", callback_data='tower_cashout')])
+
+    # Если floor = 0, значит игрок ещё не прошёл ни одного этажа, кнопка "Забрать" недоступна
+    # Если floor > 0, значит игрок прошёл floor этажей и coeff для floor-1
+    if floor > 0:
+        coeff = coeffs[floor - 1]  # коэффициент за пройденные этажи
+        kb.append([InlineKeyboardButton(f"💳 Забрать (x{coeff:.1f})", callback_data='tower_cashout')])
+    else:
+        # На нулевом этаже показываем коэффициент за первый этаж, но кнопка недоступна
+        kb.append([InlineKeyboardButton("💳 Забрать (x1.0)", callback_data='tower_cashout')])
+
     kb.append([InlineKeyboardButton("🔙 Выйти", callback_data='tower_menu')])
     return InlineKeyboardMarkup(kb)
 
@@ -776,26 +839,36 @@ def calc_miner_coeff(mines, cleared, safe_count):
 # ─────────── JETPACK GAME LOOP ───────────
 
 def jp_fly_loop(uid, bot, chat_id, msg_id, crash, bet):
-    """Background thread: updates coefficient every 2.5s to reduce API spam."""
+    """Background thread: updates coefficient every 0.5s for smooth animation."""
     coeff = 1.00
     GRACE = 2.5
+    iteration = 0
+
+    print(f"[JP] Started game for user {uid}, crash at {crash:.2f}x, bet={bet}")
 
     while True:
-        time.sleep(2.5)
+        time.sleep(0.5)  # Обновление каждые 0.5 секунды для плавности
+        iteration += 1
 
         game = jp_games.get(uid)
         if not game or not game['active']:
+            print(f"[JP] Game stopped for user {uid} (iteration {iteration}): not active")
             break
 
         # Динамический шаг: чем выше полет, тем быстрее растет (геометрическая прогрессия)
-        # Начинаем с 0.18 каждые 2.5с. При x10 шаг будет около 1.8.
-        step = round(0.18 * (coeff ** 1.2), 2)
+        # Начинаем с 0.04 каждые 0.5с (эквивалентно 0.2 в секунду)
+        step = round(0.04 * (coeff ** 1.2), 2)
         coeff = round(coeff + step, 2)
         jp_games[uid]['current'] = coeff
+
+        # Логирование каждые 10 итераций
+        if iteration % 10 == 0:
+            print(f"[JP] User {uid}: coeff={coeff:.2f}x, crash={crash:.2f}x, step={step:.2f}")
 
         # Авто-сбор
         auto = game.get('auto', 0.0)
         if auto > 1.0 and coeff >= auto:
+            print(f"[JP] Auto-cashout for user {uid} at {auto:.2f}x")
             # Превращаем в обычный сбор, но по цене 'auto'
             jp_games[uid]['active'] = False
             add_coins(uid, int(bet * auto))
@@ -810,11 +883,13 @@ def jp_fly_loop(uid, bot, chat_id, msg_id, crash, bet):
                         [InlineKeyboardButton("🔙 Главное меню", callback_data='main_menu')]
                     ])
                 )
-            except Exception: pass
+            except Exception as e:
+                print(f"[JP] Error sending auto-cashout message: {e}")
             break
 
         if coeff >= crash:
             # CRASH — record crash time, give grace period
+            print(f"[JP] Crash for user {uid} at {crash:.2f}x")
             jp_games[uid]['active'] = False
             jp_games[uid]['crashed'] = True
             jp_games[uid]['crashed_at'] = time.time()
@@ -837,8 +912,8 @@ def jp_fly_loop(uid, bot, chat_id, msg_id, crash, bet):
                         [InlineKeyboardButton("🔙 Главное меню", callback_data='main_menu')]
                     ])
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[JP] Error sending crash message: {e}")
             break
         else:
             # Still flying — update display
@@ -861,8 +936,8 @@ def jp_fly_loop(uid, bot, chat_id, msg_id, crash, bet):
                         [InlineKeyboardButton(f"💳 Забрать {winnings} монет!", callback_data='jp_collect')]
                     ])
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[JP] Error updating display: {e}")
 
 # ─────────── START ───────────
 
@@ -1523,18 +1598,70 @@ def rollback_promo_usage(promo_usage_id):
 
     return True, f"Откат промокода {code}: -{reward} монет"
 
+def delete_user_completely(target_uid):
+    """Completely delete user from database: delete user record, all games, all promos, all logs, update stats"""
+    conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+
+    # Get user info before deletion
+    c.execute('SELECT * FROM users WHERE id=?', (target_uid,))
+    user = c.fetchone()
+    if not user:
+        conn.close()
+        return False, "Пользователь не найден"
+
+    # Get user's referrer to update their ref count
+    referrer_id = user[7] if len(user) > 7 else None
+
+    # Delete all game history
+    c.execute('DELETE FROM game_history WHERE uid=?', (target_uid,))
+    games_deleted = c.rowcount
+
+    # Delete all promo usage and update promocode uses
+    c.execute('SELECT code FROM promo_usage WHERE uid=?', (target_uid,))
+    promos_used = c.fetchall()
+    for (code,) in promos_used:
+        c.execute('UPDATE promocodes SET uses=uses-1 WHERE code=?', (code,))
+    c.execute('DELETE FROM promo_usage WHERE uid=?', (target_uid,))
+    promos_deleted = len(promos_used)
+
+    # Delete all admin logs related to this user (as target or as admin)
+    c.execute('DELETE FROM admin_logs WHERE target_type="user" AND target_id=?', (target_uid,))
+    c.execute('DELETE FROM admin_logs WHERE admin_id=?', (target_uid,))
+    c.execute('DELETE FROM admin_logs WHERE action=? AND target_id=?', ('delete_user', target_uid,))
+    logs_deleted = c.rowcount
+
+    # Update referrer's total refs count
+    if referrer_id:
+        c.execute('UPDATE users SET total_refs=total_refs-1 WHERE id=?', (referrer_id,))
+
+    # Remove user from admins table if they were admin
+    c.execute('DELETE FROM admins WHERE id=?', (target_uid,))
+
+    # Update all users who had this user as referrer (set referrer_id to NULL)
+    c.execute('UPDATE users SET referrer_id=NULL WHERE referrer_id=?', (target_uid,))
+    refs_cleared = c.rowcount
+
+    # Delete user record
+    c.execute('DELETE FROM users WHERE id=?', (target_uid,))
+
+    conn.commit()
+    conn.close()
+
+    return True, f"Пользователь удалён! Игр: {games_deleted}, Промо: {promos_deleted}, Логов: {logs_deleted}, Рефы очищены: {refs_cleared}"
+
 def rollback_user_completely(target_uid):
-    """Completely rollback user: reset balance, delete all games, delete all promos, delete logs"""
+    """Completely rollback user: reset balance, delete all games, delete all promos, delete logs, clear refs"""
     conn = sqlite3.connect(DB_PATH); c = conn.cursor()
 
     # Get current balance
-    c.execute('SELECT coins FROM users WHERE id=?', (target_uid,))
+    c.execute('SELECT coins, referrer_id FROM users WHERE id=?', (target_uid,))
     result = c.fetchone()
     if not result:
         conn.close()
         return False, "Пользователь не найден"
 
     current_balance = result[0]
+    referrer_id = result[1]
 
     # Delete all game history
     c.execute('DELETE FROM game_history WHERE uid=?', (target_uid,))
@@ -1550,18 +1677,24 @@ def rollback_user_completely(target_uid):
 
     # Delete all admin logs related to this user
     c.execute('DELETE FROM admin_logs WHERE target_type="user" AND target_id=?', (target_uid,))
+    c.execute('DELETE FROM admin_logs WHERE admin_id=?', (target_uid,))
+    c.execute('DELETE FROM admin_logs WHERE action=? AND target_id=?', ('rollback_user', target_uid,))
     logs_deleted = c.rowcount
+
+    # Update referrer's total refs count (remove this user from their ref count)
+    if referrer_id:
+        c.execute('UPDATE users SET total_refs=total_refs-1 WHERE id=?', (referrer_id,))
 
     # Reset user balance to default
     c.execute('UPDATE users SET coins=500 WHERE id=?', (target_uid,))
 
-    # Reset other user stats
-    c.execute('UPDATE users SET total_refs=0, consecutive_wins=0, jetpack_best=0.0, jetpack_auto=0.0, last_hourly=NULL, last_wheel=NULL WHERE id=?', (target_uid,))
+    # Reset user referrer and other stats
+    c.execute('UPDATE users SET referrer_id=NULL, total_refs=0, consecutive_wins=0, jetpack_best=0.0, jetpack_auto=0.0, last_hourly=NULL, last_wheel=NULL WHERE id=?', (target_uid,))
 
     conn.commit()
     conn.close()
 
-    return True, f"Пользователь откачен! Игр удалено: {games_deleted}, Промокодов: {promos_deleted}, Логов: {logs_deleted}, Баланс сброшен на 500"
+    return True, f"Пользователь откачен! Игр: {games_deleted}, Промо: {promos_deleted}, Логов: {logs_deleted}, Баланс сброшен на 500"
 
 def get_action_description(action, target_type, target_id):
     """Get human-readable description of admin action"""
@@ -1789,7 +1922,6 @@ def _btn_handler(q, uid, d, context):
 
     # ── ПРОВЕРКА ПОДПИСКИ НА КАНАЛ ──
     if d == 'channel_check':
-        import threading
         import asyncio
 
         def check_subscription():
@@ -2120,6 +2252,11 @@ def _btn_handler(q, uid, d, context):
         elif '_admin_logs_users' in d_suffix:
             target_uid = int(d_suffix.replace('_admin_logs_users', ''))
             back_to = 'admin_logs_users'
+        elif '_admin_promo_users' in d_suffix:
+            # Формат: user_info_{uid}_admin_promo_users_{code}_{page}
+            parts = d_suffix.split('_')
+            target_uid = int(parts[0])
+            back_to = f'admin_promo_users_{parts[3]}_{parts[4]}' if len(parts) > 4 else 'admin_promos_active'
         else:
             # Если нет суффикса, используем значение по умолчанию
             try:
@@ -2128,8 +2265,11 @@ def _btn_handler(q, uid, d, context):
             except ValueError:
                 # Если не удалось распарсить как число, попробуем разделить по подчеркиванию
                 parts = d_suffix.split('_')
-                target_uid = int(parts[0])
-                back_to = '_'.join(parts[1:]) if len(parts) > 1 else 'admin_users'
+                try:
+                    target_uid = int(parts[0])
+                    back_to = '_'.join(parts[1:]) if len(parts) > 1 else 'admin_users'
+                except (ValueError, IndexError):
+                    q.answer("Ошибка формата данных!", show_alert=True); return
 
         # Сохраняем back_to в контексте для использования в подменю
         context.user_data['user_info_back_to'] = back_to
@@ -2178,13 +2318,13 @@ def _btn_handler(q, uid, d, context):
         text = (
             f"👤 {user[1] if user[1] else 'Без имени'}\n"
             f"🆔 ID: {user[0]}\n"
-            f"💰 Баланс: {user[2]} монет\n"
+            f"💰 Баланс: {format_number(user[2])} монет\n"
             f"🏆 Место в топе: #{position}\n"
             f"👥 Рефералов: {ref_count}\n"
             f"📅 Регистрация: {reg_date[:10] if len(reg_date) > 10 else reg_date}\n"
             f"🎮 Игр сыграно: {total_games}\n"
-            f"💸 Потрачено: {total_lost} монет\n"
-            f"💰 Заработано: {total_won} монет\n"
+            f"💸 Потрачено: {format_number(total_lost)} монет\n"
+            f"💰 Заработано: {format_number(total_won)} монет\n"
             f"📊 Статус: {blocked_text}\n"
             f"{admin_text}\n"
             f"🎫 Промокодов активировано: {len(promos_used)}"
@@ -2200,10 +2340,11 @@ def _btn_handler(q, uid, d, context):
                 [InlineKeyboardButton("🚫 Блок/Разблок", callback_data=f'user_toggle_block_{target_uid}')],
                 [InlineKeyboardButton("📢 Личное сообщение", callback_data=f'user_message_{target_uid}')],
                 [InlineKeyboardButton("⚠️ Откатить пользователя", callback_data=f'user_rollback_confirm_{target_uid}')],
+                [InlineKeyboardButton("🗑️ Удалить пользователя", callback_data=f'user_delete_confirm_{target_uid}')],
                 [InlineKeyboardButton("🔙 Назад", callback_data=back_to)]
             ])
         )
-
+        
     elif d.startswith('user_edit_balance_'):
         if not is_admin(uid):
             q.answer("Нет доступа!", show_alert=True); return
@@ -2252,6 +2393,34 @@ def _btn_handler(q, uid, d, context):
         context.user_data['admin_balance_action'] = 'set'
         context.user_data['state'] = 'admin_balance_amount'
 
+    elif d.startswith('user_block_refs_'):
+        if not is_admin(uid):
+            q.answer("Нет доступа!", show_alert=True); return
+        target_uid = int(d.replace('user_block_refs_', ''))
+
+        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        c.execute('UPDATE users SET referrer_id=NULL, is_blocked=1 WHERE referrer_id=?', (target_uid,))
+        c.execute('UPDATE users SET total_refs=0 WHERE id=?', (target_uid,))
+        conn.commit()
+        conn.close()
+
+        log_admin_action(uid, 'block_refs', 'user', target_uid)
+        q.answer("Рефералы обнулены и заблокированы!", show_alert=True)
+
+    elif d.startswith('user_reset_refs_'):
+        if not is_admin(uid):
+            q.answer("Нет доступа!", show_alert=True); return
+        target_uid = int(d.replace('user_reset_refs_', ''))
+
+        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        c.execute('UPDATE users SET referrer_id=NULL WHERE referrer_id=?', (target_uid,))
+        c.execute('UPDATE users SET total_refs=0 WHERE id=?', (target_uid,))
+        conn.commit()
+        conn.close()
+        
+        log_admin_action(uid, 'reset_refs', 'user', target_uid)
+        q.answer("Рефералы обнулены!", show_alert=True)
+
     elif d.startswith('user_block_'):
         if not is_admin(uid):
             q.answer("Нет доступа!", show_alert=True); return
@@ -2268,15 +2437,37 @@ def _btn_handler(q, uid, d, context):
         log_admin_action(uid, 'unblock', 'user', target_uid)
         q.answer("Пользователь разблокирован!", show_alert=True)
 
+    elif d.startswith('user_message_text_'):
+        if not is_admin(uid):
+            q.answer("Нет доступа!", show_alert=True); return
+        target_uid = int(d.replace('user_message_text_', ''))
+        q.edit_message_text(
+            f"📝 Текстовое сообщение пользователю {target_uid}\n\nВведите текст сообщения:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=f'user_info_{target_uid}')]]))
+        context.user_data['admin_target_uid'] = target_uid
+        context.user_data['state'] = 'admin_user_message'
+
+    elif d.startswith('user_message_photo_'):
+        if not is_admin(uid):
+            q.answer("Нет доступа!", show_alert=True); return
+        target_uid = int(d.replace('user_message_photo_', ''))
+        q.edit_message_text(
+            f"🖼️ Фото пользователю {target_uid}\n\nОтправьте фото с подписью (или просто фото):",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=f'user_info_{target_uid}')]]))
+        context.user_data['admin_target_uid'] = target_uid
+        context.user_data['state'] = 'admin_user_message'
+
     elif d.startswith('user_message_'):
         if not is_admin(uid):
             q.answer("Нет доступа!", show_alert=True); return
         target_uid = int(d.replace('user_message_', ''))
         q.edit_message_text(
-            f"📢 Личное сообщение пользователю {target_uid}\n\nВведите текст сообщения:",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=f'user_info_{target_uid}')]]))
-        context.user_data['admin_target_uid'] = target_uid
-        context.user_data['state'] = 'admin_user_message'
+            f"📢 Личное сообщение пользователю {target_uid}\n\nВыберите тип сообщения:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("📝 Текстовое", callback_data=f'user_message_text_{target_uid}')],
+                [InlineKeyboardButton("🖼️ Фото", callback_data=f'user_message_photo_{target_uid}')],
+                [InlineKeyboardButton("🔙 Назад", callback_data=f'user_info_{target_uid}')]
+            ]))
 
     elif d.startswith('user_balance_menu_'):
         if not is_admin(uid):
@@ -2285,7 +2476,7 @@ def _btn_handler(q, uid, d, context):
         row = get_user(target_uid)
         back_to = context.user_data.get('user_info_back_to', 'admin_users')
         q.edit_message_text(
-            f"💰 Управление балансом пользователя {target_uid}\n\nТекущий баланс: {row[2]} монет",
+            f"💰 Управление балансом пользователя {target_uid}\n\nТекущий баланс: {format_number(row[2])} монет",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("➕ Добавить", callback_data=f'user_add_balance_{target_uid}')],
                 [InlineKeyboardButton("➖ Вычесть", callback_data=f'user_sub_balance_{target_uid}')],
@@ -2293,7 +2484,7 @@ def _btn_handler(q, uid, d, context):
                 [InlineKeyboardButton("🔙 Назад", callback_data=f'user_info_{target_uid}_{back_to}')]
             ])
         )
-
+        
     elif d.startswith('user_game_history_') or d.startswith('user_game_history_filter_'):
         if not is_admin(uid):
             q.answer("Нет доступа!", show_alert=True); return
@@ -2333,7 +2524,7 @@ def _btn_handler(q, uid, d, context):
         }[rolled_back]
 
         rows, total = get_history_paged(target_uid, page, rolled_back=rolled_back)
-        pages = (total + 4) // 5 or 1
+        pages = (total + 19) // 20 or 1
         back_to = context.user_data.get('user_info_back_to', 'admin_users')
         
         if not rows:
@@ -2352,8 +2543,9 @@ def _btn_handler(q, uid, d, context):
                 res_emoji = "✅" if is_win else "❌"
                 sign = "+" if is_win else "-"
                 rollback_marker = " ↩️" if is_game_rolled_back(is_rolled_back) else ""
+                amount_str = format_number(amount)
                 kb.append([InlineKeyboardButton(
-                    f"{res_emoji} {g_emoji} {gname}: {sign}{amount}{rollback_marker}",
+                    f"{res_emoji} {g_emoji} {gname}: {sign}{amount_str}{rollback_marker}",
                     callback_data=f'admin_gameview_{gid}_{target_uid}_{page}'
                 )])
 
@@ -2505,14 +2697,14 @@ def _btn_handler(q, uid, d, context):
         c.execute('SELECT id, username, coins FROM users WHERE referrer_id=? LIMIT 10', (target_uid,))
         refs = c.fetchall()
         conn.close()
-
+        
         if not refs:
             text = f"👥 Рефералы пользователя {target_uid}\n\nНет рефералов"
         else:
             text = f"👥 Рефералы пользователя {target_uid} (первые 10)\n\n"
             for ref_id, ref_name, ref_coins in refs:
                 name = ref_name if ref_name else f"ID:{ref_id}"
-                text += f"👤 {name} | 💰{ref_coins}\n"
+                text += f"👤 {name} | 💰{format_number(ref_coins)}\n"
 
         q.edit_message_text(text,
             reply_markup=InlineKeyboardMarkup([
@@ -2521,35 +2713,7 @@ def _btn_handler(q, uid, d, context):
                 [InlineKeyboardButton("🔙 Назад", callback_data=f'user_info_{target_uid}_{back_to}')]
             ])
         )
-
-    elif d.startswith('user_reset_refs_'):
-        if not is_admin(uid):
-            q.answer("Нет доступа!", show_alert=True); return
-        target_uid = int(d.replace('user_reset_refs_', ''))
-
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute('UPDATE users SET referrer_id=NULL WHERE referrer_id=?', (target_uid,))
-        c.execute('UPDATE users SET total_refs=0 WHERE id=?', (target_uid,))
-        conn.commit()
-        conn.close()
-
-        log_admin_action(uid, 'reset_refs', 'user', target_uid)
-        q.answer("Рефералы обнулены!", show_alert=True)
-
-    elif d.startswith('user_block_refs_'):
-        if not is_admin(uid):
-            q.answer("Нет доступа!", show_alert=True); return
-        target_uid = int(d.replace('user_block_refs_', ''))
-
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute('UPDATE users SET referrer_id=NULL, is_blocked=1 WHERE referrer_id=?', (target_uid,))
-        c.execute('UPDATE users SET total_refs=0 WHERE id=?', (target_uid,))
-        conn.commit()
-        conn.close()
-
-        log_admin_action(uid, 'block_refs', 'user', target_uid)
-        q.answer("Рефералы обнулены и заблокированы!", show_alert=True)
-
+        
     elif d.startswith('user_admin_'):
         if not is_admin(uid):
             q.answer("Нет доступа!", show_alert=True); return
@@ -2680,6 +2844,55 @@ def _btn_handler(q, uid, d, context):
         else:
             q.answer(message, show_alert=True)
 
+    elif d.startswith('user_delete_confirm_'):
+        if not is_admin(uid):
+            q.answer("Нет доступа!", show_alert=True); return
+        target_uid = int(d.replace('user_delete_confirm_', ''))
+        back_to = context.user_data.get('user_info_back_to', 'admin_users')
+
+        # Prevent deleting yourself
+        if target_uid == uid:
+            q.answer("Вы не можете удалить себя!", show_alert=True); return
+
+        q.edit_message_text(
+            f"⚠️ ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ\n\n"
+            f"Вы собираетесь полностью удалить пользователя {target_uid}!\n\n"
+            f"Это действие:\n"
+            f"• Удалит пользователя из базы данных\n"
+            f"• Удалит всю историю игр пользователя\n"
+            f"• Удалит все активированные промокоды\n"
+            f"• Удалит все логи действий админа с этим пользователем\n"
+            f"• Удалит пользователя из реферальной системы\n"
+            f"• Снимет админку если она была\n\n"
+            f"⚠️ ЭТО ДЕЙСТВИЕ НЕОБРАТИМО!\n\n"
+            f"Вы уверены?",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Да, удалить", callback_data=f'user_delete_do_{target_uid}')],
+                [InlineKeyboardButton("❌ Отмена", callback_data=f'user_info_{target_uid}_{back_to}')]
+            ])
+        )
+
+    elif d.startswith('user_delete_do_'):
+        if not is_admin(uid):
+            q.answer("Нет доступа!", show_alert=True); return
+        target_uid = int(d.replace('user_delete_do_', ''))
+        back_to = context.user_data.get('user_info_back_to', 'admin_users')
+
+        # Prevent deleting yourself
+        if target_uid == uid:
+            q.answer("Вы не можете удалить себя!", show_alert=True); return
+
+        success, message = delete_user_completely(target_uid)
+
+        if success:
+            log_admin_action(uid, 'delete_user', 'user', target_uid, message)
+            q.edit_message_text(
+                f"✅ {message}\n\nПользователь удалён полностью!",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=back_to)]])
+            )
+        else:
+            q.answer(message, show_alert=True)
+
     elif d == 'admin_broadcasts':
         if not is_admin(uid):
             q.answer("Нет доступа!", show_alert=True); return
@@ -2721,11 +2934,11 @@ def _btn_handler(q, uid, d, context):
 
         text = "📋 История рассылок\n\n"
         for i, b in enumerate(broadcasts[:5]):
-            b_id, msg_type, content, file_id, scheduled, status, sent_at, created_by = b
+            b_id, msg_type, content, file_id, scheduled_at, sent_at, status, created_by, created_at = b
             status_emoji = "✅" if status == 'sent' else "⏳"
             text += f"{status_emoji} #{b_id}: {msg_type}\n"
-            if scheduled:
-                text += f"   Запланировано: {scheduled}\n"
+            if scheduled_at:
+                text += f"   Запланировано: {scheduled_at}\n"
             elif sent_at:
                 text += f"   Отправлено: {sent_at}\n"
 
@@ -2781,7 +2994,7 @@ def _btn_handler(q, uid, d, context):
                      ORDER BY created_at DESC''')
         promos = c.fetchall()
         conn.close()
-
+        
         if not promos:
             q.edit_message_text("🎫 Активных промокодов нет",
                 reply_markup=InlineKeyboardMarkup([
@@ -2833,22 +3046,38 @@ def _btn_handler(q, uid, d, context):
     elif d.startswith('admin_promo_detail_'):
         if not is_admin(uid):
             q.answer("Нет доступа!", show_alert=True); return
-        code = d.replace('admin_promo_detail_', '')
+        
+        # Используем более безопасный способ извлечения кода
+        prefix = 'admin_promo_detail_'
+        if d == prefix:
+            q.answer("Неверный формат!", show_alert=True); return
+        code = d[len(prefix):]
+        
+        if not code:
+            q.answer("Код промокода пуст!", show_alert=True); return
 
         conn = sqlite3.connect(DB_PATH); c = conn.cursor()
         c.execute('SELECT * FROM promocodes WHERE code=?', (code,))
         promo = c.fetchone()
         if not promo:
+            # Выводим более подробную информацию для отладки
+            # Показываем все промокоды для диагностики
+            c.execute('SELECT code, reward, uses, max_uses, deleted FROM promocodes ORDER BY created_at DESC LIMIT 10')
+            all_promos = c.fetchall()
             conn.close()
-            q.answer("Промокод не найден!", show_alert=True); return
+            debug_info = "Список промокодов в БД:\n"
+            for p in all_promos:
+                debug_info += f"- {p[0]}: +{p[1]} ({p[2]}/{p[3] or '∞'}) [{'активен' if p[4]==0 else 'удалён'}]\n"
+            q.answer(f"Промокод '{code}' не найден!\n\n{debug_info[:200]}", show_alert=True); return
 
-        p_id, p_code, reward, max_uses, uses, max_per_user, created_by, deleted = promo
+        # Распаковка в правильном порядке: code, reward, uses, max_uses, max_per_user, deleted, created_by, created_at
+        p_code, reward, uses, max_uses, max_per_user, deleted, created_by, created_at = promo
 
-        # Get usage statistics
-        c.execute('SELECT pu.uid, u.username, COUNT(*) as cnt FROM promo_usage pu LEFT JOIN users u ON pu.uid=u.id WHERE pu.code=? GROUP BY pu.uid ORDER BY cnt DESC LIMIT 10', (code,))
-        usage = c.fetchall()
+        # Считаем количество уникальных пользователей
+        c.execute('SELECT COUNT(DISTINCT uid) FROM promo_usage WHERE code=?', (code,))
+        unique_users = c.fetchone()[0]
         conn.close()
-
+        
         uses_info = f"{uses}/{max_uses}" if max_uses else f"{uses}/∞"
         status = "🚫 Истек/Удален" if deleted else "✅ Активен"
 
@@ -2856,28 +3085,142 @@ def _btn_handler(q, uid, d, context):
             f"🎫 Промокод: {code}\n"
             f"💰 Награда: {reward} монет\n"
             f"📊 Использований: {uses_info}\n"
+            f"👥 Активировали: {unique_users} чел.\n"
             f"👤 На пользователя: {max_per_user} раз\n"
             f"📅 Статус: {status}\n"
         )
+        
+        # Кнопки управления
+        kb = [
+            [InlineKeyboardButton("👥 Кто активировал", callback_data=f'admin_promo_users_{code}_1')],
+            [InlineKeyboardButton("✏️ Изменить промо", callback_data=f'admin_promo_edit_{code}')],
+            [InlineKeyboardButton("🗑️ Удалить промокод", callback_data=f'admin_promo_delete_confirm_{code}')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='admin_promos_active' if deleted == 0 else 'admin_promos_expired')]
+        ]
+        q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
-        if usage:
-            text += f"\n📊 Топ-10 использований:\n"
-            for u_id, username, cnt in usage:
-                name = username if username else f"ID:{u_id}"
-                text += f"• {name}: {cnt} раз\n"
+    elif d.startswith('admin_promo_users_'):
+        if not is_admin(uid):
+            q.answer("Нет доступа!", show_alert=True); return
+        
+        # Безопасное извлечение кода и страницы
+        suffix = d[len('admin_promo_users_'):]
+        # Разделяем только по первому нижнему подчёркиванию после кода
+        parts = suffix.split('_')
+        code = parts[0]
+        page = int(parts[1]) if len(parts) > 1 else 1
+        
+        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        
+        # Получаем список пользователей, активировавших промокод
+        c.execute('''SELECT pu.uid, u.username, COUNT(*) as cnt, MAX(pu.used_at) as last_use 
+                     FROM promo_usage pu 
+                     LEFT JOIN users u ON pu.uid=u.id 
+                     WHERE pu.code=? 
+                     GROUP BY pu.uid 
+                     ORDER BY last_use DESC''', (code,))
+        all_users = c.fetchall()
+        
+        # Информация о промокоде
+        c.execute('SELECT reward, deleted FROM promocodes WHERE code=?', (code,))
+        promo_info = c.fetchone()
+        conn.close()
+        
+        if not all_users:
+            q.edit_message_text(
+                f"🎫 Промокод: {code}\n\nНикто ещё не активировал этот промокод.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 Назад", callback_data=f'admin_promo_detail_{code}')]
+                ])
+            )
+            return
+        
+        # Пагинация (5 пользователей на страницу)
+        per_page = 5
+        total = len(all_users)
+        total_pages = (total + per_page - 1) // per_page
+        start = (page - 1) * per_page
+        end = start + per_page
+        users_page = all_users[start:end]
+        
+        text = f"🎫 Промокод: {code}\n👥 Активировали ({total} чел.):\n\n"
+        
+        kb = []
+        for u_id, username, cnt, last_use in users_page:
+            name = username if username else f"ID:{u_id}"
+            last_use_str = last_use[:16] if last_use else "?"
+            text += f"• {name}: {cnt} раз ({last_use_str})\n"
+            kb.append([InlineKeyboardButton(f"👤 {name} ({cnt}x)", callback_data=f'user_info_{u_id}_admin_promo_users_{code}_{page}')])
+        
+        # Навигация
+        nav = []
+        if page > 1:
+            nav.append(InlineKeyboardButton("◀️", callback_data=f'admin_promo_users_{code}_{page-1}'))
+        nav.append(InlineKeyboardButton(f"{page}/{total_pages}", callback_data='dummy'))
+        if page < total_pages:
+            nav.append(InlineKeyboardButton("▶️", callback_data=f'admin_promo_users_{code}_{page+1}'))
+        if len(nav) > 1:
+            kb.append(nav)
+        
+        kb.append([InlineKeyboardButton("🔙 Назад", callback_data=f'admin_promo_detail_{code}')])
+        
+        q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
-        # Delete button for both active and expired promos
+    elif d.startswith('admin_promo_edit_'):
+        if not is_admin(uid):
+            q.answer("Нет доступа!", show_alert=True); return
+        code = d[len('admin_promo_edit_'):]
+        
+        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        c.execute('SELECT reward, max_uses, max_per_user FROM promocodes WHERE code=?', (code,))
+        promo = c.fetchone()
+        conn.close()
+        
+        if not promo:
+            q.answer("Промокод не найден!", show_alert=True); return
+        
+        reward, max_uses, max_per_user = promo
+        max_uses_str = str(max_uses) if max_uses else "∞"
+        
+        text = (
+            f"✏️ Редактирование промокода: {code}\n\n"
+            f"Текущие значения:\n"
+            f"💰 Награда: {reward}\n"
+            f"📊 Макс. использований: {max_uses_str}\n"
+            f"👤 Макс. на пользователя: {max_per_user}\n\n"
+            f"Формат: НАГРАДА [МАКС_ИСПОЛЬЗОВАНИЙ] [МАКС_НА_ПОЛЬЗОВАТЕЛЯ]\n"
+            f"Пример: 1000 50 2\n"
+            f"Для ∞ использований введите 0"
+        )
+        
+        context.user_data['admin_promo_edit_code'] = code
+        context.user_data['state'] = 'admin_promo_edit'
+        
         q.edit_message_text(text,
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🗑️ Удалить промокод", callback_data=f'admin_promo_delete_{code}')],
-                [InlineKeyboardButton("🔙 Назад", callback_data='admin_promos')]
+                [InlineKeyboardButton("🔙 Отмена", callback_data=f'admin_promo_detail_{code}')]
+            ]))
+
+    elif d.startswith('admin_promo_delete_confirm_'):
+        if not is_admin(uid):
+            q.answer("Нет доступа!", show_alert=True); return
+        code = d[len('admin_promo_delete_confirm_'):]
+        
+        q.edit_message_text(
+            f"⚠️ Подтверждение удаления\n\n"
+            f"🎫 Промокод: {code}\n\n"
+            f"Вы уверены, что хотите удалить этот промокод?\n"
+            f"Это действие нельзя отменить!",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Да, удалить", callback_data=f'admin_promo_delete_{code}')],
+                [InlineKeyboardButton("❌ Отмена", callback_data=f'admin_promo_detail_{code}')]
             ])
         )
 
     elif d.startswith('admin_promo_delete_'):
         if not is_admin(uid):
             q.answer("Нет доступа!", show_alert=True); return
-        code = d.replace('admin_promo_delete_', '')
+        code = d[len('admin_promo_delete_'):]
 
         # Delete promocode completely
         delete_promocode(code)
@@ -3033,7 +3376,8 @@ def _btn_handler(q, uid, d, context):
                 rolled_emoji = "↩️" if is_game_rolled_back(is_rolled_back) else ""
                 sign = "+" if is_win else "-"
                 uname = usernames.get(g_uid, f"ID:{g_uid}")
-                text += f"{res_emoji} {rolled_emoji} {g_emoji} {uname} {gname}: {sign}{amount}\n"
+                amount_str = format_number(amount)
+                text += f"{res_emoji} {rolled_emoji} {g_emoji} {uname} {gname}: {sign}{amount_str}\n"
             
             kb = []
             # Кнопки фильтров
@@ -3056,8 +3400,9 @@ def _btn_handler(q, uid, d, context):
                 rolled_emoji = "↩️" if is_game_rolled_back(is_rolled_back) else ""
                 sign = "+" if is_win else "-"
                 uname = usernames.get(g_uid, f"ID:{g_uid}")
+                amount_str = format_number(amount)
                 kb.append([InlineKeyboardButton(
-                    f"{res_emoji} {rolled_emoji} {g_emoji} {uname} {gname}: {sign}{amount}",
+                    f"{res_emoji} {rolled_emoji} {g_emoji} {uname} {gname}: {sign}{amount_str}",
                     callback_data=f'admin_log_detail_game_{gid}'
                 )])
 
@@ -3084,7 +3429,43 @@ def _btn_handler(q, uid, d, context):
 
         q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
-    elif d == 'admin_logs_users_multi_mode' or d.startswith('admin_logs_users_multi_') or d == 'admin_logs_users_multi_select_all' or d == 'admin_logs_users_multi_deselect_all' or d == 'admin_logs_users_multi_confirm' or d == 'admin_logs_users_multi_execute':
+    elif d == 'admin_logs_users_multi_select_all':
+        if not is_admin(uid):
+            q.answer("Нет доступа!", show_alert=True); return
+
+        page = context.user_data.get('admin_logs_users_multi_page', 0)
+        rolled_back = context.user_data.get('admin_logs_users_filter', None)
+        selected = context.user_data.get('admin_logs_users_multi', [])
+        page_size = 10
+        offset = page * page_size
+
+        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        if rolled_back is None:
+            c.execute('SELECT id FROM game_history ORDER BY id DESC LIMIT ? OFFSET ?', (page_size, offset))
+        elif rolled_back:
+            c.execute('SELECT id FROM game_history WHERE is_rolled_back=1 ORDER BY id DESC LIMIT ? OFFSET ?', (page_size, offset))
+        else:
+            c.execute('SELECT id FROM game_history WHERE is_rolled_back=0 OR is_rolled_back IS NULL ORDER BY id DESC LIMIT ? OFFSET ?', (page_size, offset))
+        game_ids = [r[0] for r in c.fetchall()]
+        conn.close()
+
+        for gid in game_ids:
+            if gid not in selected:
+                selected.append(gid)
+        context.user_data['admin_logs_users_multi'] = selected
+
+        d = 'admin_logs_users_multi_mode'
+        _btn_handler(q, uid, d, context)
+
+    elif d == 'admin_logs_users_multi_deselect_all':
+        if not is_admin(uid):
+            q.answer("Нет доступа!", show_alert=True); return
+
+        context.user_data['admin_logs_users_multi'] = []
+        d = 'admin_logs_users_multi_mode'
+        _btn_handler(q, uid, d, context)
+
+    elif d == 'admin_logs_users_multi_mode' or d.startswith('admin_logs_users_multi_select_') or d.startswith('admin_logs_users_multi_deselect_') or d == 'admin_logs_users_multi_confirm' or d == 'admin_logs_users_multi_execute':
         if not is_admin(uid):
             q.answer("Нет доступа!", show_alert=True); return
 
@@ -3140,7 +3521,7 @@ def _btn_handler(q, uid, d, context):
                 c.execute('SELECT id FROM game_history WHERE is_rolled_back=0 OR is_rolled_back IS NULL ORDER BY id DESC LIMIT ? OFFSET ?', (page_size, offset))
             game_ids = [r[0] for r in c.fetchall()]
             conn.close()
-            
+
             for gid in game_ids:
                 if gid not in selected:
                     selected.append(gid)
@@ -3969,15 +4350,21 @@ def _btn_handler(q, uid, d, context):
         uname = row[1] if row[1] else f"ID:{uid}"
         msg = (
             f"👤 Профиль: {uname}\n"
-            f" Баланс: {row[2]} монет\n"
+            f"💰 Баланс: {format_number(row[2])} монет\n"
             f"🚀 Рекорд Jetpack: {row[5]:.2f}x\n"
             f"👥 Рефералов: {row[8]}\n"
             f"📅 Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}\n"
         )
         q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📜 История игр", callback_data='history')],
+            [InlineKeyboardButton("💰 Точный баланс", callback_data='show_balance')],
             [InlineKeyboardButton("🔙 Назад", callback_data='main_menu')]
         ]))
+
+    elif d == 'show_balance':
+        row = get_user(uid)
+        exact_balance = format_number_full(row[2])
+        q.answer(f"💰 Точный баланс: {exact_balance} монет", show_alert=True)
 
     elif d == 'history' or d.startswith('history_page_') or d.startswith('history_sort_') or d == 'history_all' or d == 'history_paged' or (d.startswith('history_goto_') and d != 'history_goto_menu'):
         # Обработка истории игр с расширенной сортировкой
@@ -4023,7 +4410,7 @@ def _btn_handler(q, uid, d, context):
         # Получаем историю с фильтрами
         # Если выбрано несколько игр, фильтруем по первой (или можно изменить функцию для поддержки списка)
         # Для простоты: если выбрана одна игра - фильтруем по ней, если несколько - показываем все выбранные
-        page_size = -1 if show_all else 5  # -1 = все
+        page_size = -1 if show_all else 5  # -1 = все, 5 = записей на страницу
         
         # Получаем все игры и фильтруем на стороне Python если нужно
         if len(sort_games) == 1:
@@ -4322,7 +4709,7 @@ def _btn_handler(q, uid, d, context):
                 [InlineKeyboardButton("🔙 Назад", callback_data='games_menu')]
             ])
         )
-
+        
     elif d == 'candles_need_bet':
         q.answer("Сначала сделайте ставку!", show_alert=True)
 
@@ -4525,7 +4912,7 @@ def _btn_handler(q, uid, d, context):
                 [InlineKeyboardButton("▶️ Начать игру", callback_data='cf_start') if can_start
                  else InlineKeyboardButton("▶️ Начать (сначала сделайте ставку)", callback_data='cf_need_bet')],
                 [InlineKeyboardButton(f"💰 Сделать ставку ({bet} монет)", callback_data='cf_set_bet')],
-                [InlineKeyboardButton("🔙 Главное меню", callback_data='main_menu')]
+                [InlineKeyboardButton("🔙 Назад", callback_data='games_menu')]
             ])
         )
 
@@ -4592,7 +4979,7 @@ def _btn_handler(q, uid, d, context):
                 f"😞 Выпало: {result_emoji} — Не угадали!\nВы проиграли {bet} монет.\n💰 Баланс: {row[2]} монет",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🔄 Играть снова", callback_data='cf_menu')],
-                    [InlineKeyboardButton("🔙 Главное меню", callback_data='main_menu')]
+                    [InlineKeyboardButton("🔙 Назад", callback_data='games_menu')]
                 ])
             )
 
@@ -4612,7 +4999,7 @@ def _btn_handler(q, uid, d, context):
             f"✅ Выигрыш забран!\n💰 +{winnings} монет (x{coeff:.0f}) | Прибыль: +{profit}\n💰 Баланс: {row[2]} монет",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔄 Играть снова", callback_data='cf_menu')],
-                [InlineKeyboardButton("🔙 Главное меню", callback_data='main_menu')]
+                [InlineKeyboardButton("🔙 Назад", callback_data='games_menu')]
             ])
         )
 
@@ -4622,7 +5009,7 @@ def _btn_handler(q, uid, d, context):
         row = get_user(uid)
         q.edit_message_text(
             f"❌ Вы вышли. Ставка потеряна.\n💰 Баланс: {row[2]} монет",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Главное меню", callback_data='main_menu')]]))
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='games_menu')]]))
 
     # ════════════════════════════
     # ── МИНЁР ──
@@ -4665,7 +5052,7 @@ def _btn_handler(q, uid, d, context):
                 [InlineKeyboardButton("🔙 Назад", callback_data='miner_menu')]
             ])
         )
-
+        
     elif d.startswith('miner_mines_'):
         val = d.replace('miner_mines_', '')
         if val == 'custom':
@@ -4872,6 +5259,7 @@ def _btn_handler(q, uid, d, context):
 
         # Auto-collect at crash if auto <= crash and auto > 1.0 (handled in thread)
         # Register game state
+        print(f"[JP] Starting game for user {uid}: bet={bet}, crash={crash:.2f}x, auto={auto:.2f}x")
         jp_games[uid] = {
             'active': True,
             'crash': crash,
@@ -4881,6 +5269,7 @@ def _btn_handler(q, uid, d, context):
             'crashed': False,
             'crashed_at': 0
         }
+        print(f"[JP] Game registered in jp_games: {jp_games.get(uid)}")
 
         # Edit message to show the start
         q.edit_message_text(
@@ -4896,12 +5285,14 @@ def _btn_handler(q, uid, d, context):
         bot = q.bot
 
         # Check auto-cashout: if auto <= crash, the thread will handle it
+        print(f"[JP] Starting background thread for user {uid}")
         t = threading.Thread(
             target=jp_fly_loop,
             args=(uid, bot, chat_id, msg_id, crash, bet),
             daemon=True
         )
         t.start()
+        print(f"[JP] Thread started for user {uid}")
 
     # ════════════════════════════
     # ── СЛОТЫ ──
@@ -5209,7 +5600,7 @@ def _btn_handler(q, uid, d, context):
         text = "🏆 Топ-10 игроков:\n\n"
         for i, (lid, uname, coins) in enumerate(leaders):
             name = uname if uname else f"ID:{lid}"
-            text += f"{medals[i]} {name} — {coins} монет\n"
+            text += f"{medals[i]} {name} — {format_number(coins)} монет\n"
         q.edit_message_text(text,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔄 Обновить", callback_data='leaderboard')],
@@ -5331,11 +5722,32 @@ def _btn_handler(q, uid, d, context):
 # ─────────── СООБЩЕНИЯ ───────────
 
 def handle_photo(update: Update, context: CallbackContext):
-    """Handle photo messages for admin broadcasts"""
+    """Handle photo messages for admin broadcasts and user messages"""
     uid = update.effective_user.id
     state = context.user_data.get('state', '')
 
-    if state == 'admin_broadcast_photo' and is_admin(uid):
+    if state == 'admin_user_message' and is_admin(uid):
+        target_uid = context.user_data.get('admin_target_uid')
+        if not target_uid:
+            update.message.reply_text("❌ Ошибка! Попробуйте снова.")
+            context.user_data['state'] = ''
+            return
+
+        try:
+            # Get largest photo
+            photo = update.message.photo[-1]
+            file_id = photo.file_id
+            caption = update.message.caption or ""
+
+            update.message.bot.send_photo(target_uid, file_id, caption=caption)
+            log_admin_action(uid, 'send_photo', 'user', target_uid, f'caption: {caption[:50]}')
+            update.message.reply_text(f"✅ Фото отправлено пользователю {target_uid}")
+        except Exception as e:
+            update.message.reply_text(f"❌ Не удалось отправить фото: {e}")
+
+        context.user_data['state'] = ''
+
+    elif state == 'admin_broadcast_photo' and is_admin(uid):
         # Get largest photo
         photo = update.message.photo[-1]
         file_id = photo.file_id
@@ -5386,7 +5798,7 @@ def handle_text(update: Update, context: CallbackContext):
                 "🚫 Вы заблокированы!\n\nОбратитесь к администратору."
             )
             return
-
+        
     if state == 'hourly_guess':
         try:
             guess = int(text)
@@ -5462,11 +5874,11 @@ def handle_text(update: Update, context: CallbackContext):
             context.user_data['cf_coeff'] = 1.0
             # Показываем меню игры (как при нажатии cf_menu)
             update.message.reply_text(
-                f"🪙 Монетка\n💰 Баланс: {row[2]} монет\nСтавка: {amount} монет\n\nУгадайте: 🪙 Орёл или 🦃 Решка?\nПравильный прогноз = x1.9",
+                f"🪙 Монетка\n💰 Баланс: {row[2]} монет\nСтавка: {amount} монет",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("▶️ Начать игру", callback_data='cf_start')],
                     [InlineKeyboardButton(f"💰 Сделать ставку ({amount} монет)", callback_data='cf_set_bet')],
-                    [InlineKeyboardButton("🔙 Главное меню", callback_data='main_menu')]
+                    [InlineKeyboardButton("🔙 Назад", callback_data='games_menu')]
                 ])
             )
         except ValueError:
@@ -5488,7 +5900,7 @@ def handle_text(update: Update, context: CallbackContext):
             context.user_data['miner_bet'] = amount
             mines = context.user_data.get('miner_mines', 5)
             update.message.reply_text(
-                f"⛏️ Минёр\n💰 Баланс: {row[2]} монет\nСтавка: {amount} монет | Мин: {mines}\n\n5x5 поле. {mines} мин. Открывайте безопасные ячейки!\nКомиссия: {8 + (mines - 3) * 0.3:.1f}%",
+                f"⛏️ Минёр\n💰 Баланс: {row[2]} монет\nСтавка: {amount} монет | Мин: {mines}",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("▶️ Начать игру", callback_data='miner_start')],
                     [InlineKeyboardButton(f"💰 Изменить ставку ({amount})", callback_data='miner_set_bet')],
@@ -5507,6 +5919,22 @@ def handle_text(update: Update, context: CallbackContext):
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='miner_menu')]]))
                 return
             context.user_data['state'] = ''
+            context.user_data['miner_mines'] = count
+            bet = context.user_data.get('miner_bet', 0)
+            row = get_user(uid)
+            can_start = bet > 0
+            update.message.reply_text(
+                f"⛏️ Минёр\n💰 Баланс: {row[2]} монет\nСтавка: {bet} монет | Мин: {count}",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("▶️ Начать игру", callback_data='miner_start') if can_start
+                     else InlineKeyboardButton("▶️ Начать (сделайте ставку)", callback_data='miner_need_bet')],
+                    [InlineKeyboardButton(f"💰 Изменить ставку ({bet})", callback_data='miner_set_bet')],
+                    [InlineKeyboardButton(f"💣 Изменить мины ({count})", callback_data='miner_set_mines')],
+                    [InlineKeyboardButton("🔙 Назад", callback_data='games_menu')]
+                ])
+            )
+        except ValueError:
+            update.message.reply_text("❌ Введите корректное целое число!")
             context.user_data['miner_mines'] = count
             bet = context.user_data.get('miner_bet', 0)
             row = get_user(uid)
@@ -5541,7 +5969,7 @@ def handle_text(update: Update, context: CallbackContext):
             auto = context.user_data.get('jp_auto', 0.0)
             auto_txt = f"{auto:.2f}x" if auto > 1.0 else "Выкл"
             update.message.reply_text(
-                f"🚀 Джетпак\n💰 Баланс: {row[2]} монет\nСтавка: {amount} монет | Авто-сбор: {auto_txt}\n\nМножитель растёт! Соберите до краша.\nКраш может случиться в любой момент (x1.00+).",
+                f"🚀 Джетпак\n💰 Баланс: {row[2]} монет\nСтавка: {amount} монет | Авто-сбор: {auto_txt}",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("▶️ Начать игру", callback_data='jp_start')],
                     [InlineKeyboardButton(f"💰 Ставка ({amount})", callback_data='jp_set_bet'),
@@ -5828,6 +6256,48 @@ def handle_text(update: Update, context: CallbackContext):
 
         context.user_data['state'] = ''
 
+    elif state == 'admin_promo_edit':
+        code = context.user_data.get('admin_promo_edit_code')
+        if not code:
+            update.message.reply_text("❌ Ошибка! Попробуйте снова.")
+            context.user_data['state'] = ''
+            return
+        
+        parts = text.split()
+        try:
+            reward = int(parts[0])
+            max_uses = int(parts[1]) if len(parts) > 1 else None
+            max_per_user = int(parts[2]) if len(parts) > 2 else 1
+            
+            if reward < 0:
+                update.message.reply_text("❌ Награда не может быть отрицательной!")
+                return
+        except ValueError:
+            update.message.reply_text("❌ Неверные числа! Пример: 1000 50 2")
+            return
+
+        # Обновляем промокод
+        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        c.execute('UPDATE promocodes SET reward=?, max_uses=?, max_per_user=? WHERE code=?',
+                  (reward, max_uses, max_per_user, code))
+        conn.commit()
+        conn.close()
+        
+        log_admin_action(uid, 'edit_promo', 'promocode', code, f'reward: {reward}, max_uses: {max_uses}, max_per_user: {max_per_user}')
+        
+        uses_info = f"{max_uses}" if max_uses else "∞"
+        update.message.reply_text(
+            f"✅ Промокод обновлён!\n"
+            f"🎫 Код: {code}\n"
+            f"💰 Награда: {reward} монет\n"
+            f"📊 Использований: {uses_info}\n"
+            f"👤 На пользователя: {max_per_user}",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=f'admin_promo_detail_{code}')]])
+        )
+        
+        context.user_data['admin_promo_edit_code'] = None
+        context.user_data['state'] = ''
+
     elif state == 'admin_add_admin':
         # Try to parse as ID first, then search by username
         admin_id = None
@@ -5907,6 +6377,9 @@ def handle_text(update: Update, context: CallbackContext):
             amount = int(text)
             if amount < 0:
                 update.message.reply_text("❌ Сумма должна быть положительной!")
+                return
+            if amount > 9_223_372_036_854_775_807:  # SQLite INTEGER max value
+                update.message.reply_text("❌ Слишком большое число! Максимум: 9,223,372,036,854,775,807")
                 return
 
             conn = sqlite3.connect(DB_PATH); c = conn.cursor()
